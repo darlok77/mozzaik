@@ -18,6 +18,7 @@ import { CaretDown, CaretUp, Chat } from "@phosphor-icons/react";
 import { format } from "timeago.js";
 import {
   createMemeComment,
+  CreateCommentResponse,
   getMemeComments,
   getMemes,
   GetMemesResponse,
@@ -70,10 +71,32 @@ export const MemeFeedPage: React.FC = () => {
     },
     enabled: !!token
   });
+
+  const onCommentAdded = (newComment: CreateCommentResponse) => {
+    if (!user) return;
+    const { username, pictureUrl } = user
+    setMemes((prevMemes) =>
+      prevMemes.map((meme) =>
+        meme.id === newComment.memeId
+          ? {
+              ...meme,
+              comments: [
+                ...meme.comments,
+                {
+                  ...newComment,
+                  author: { username, pictureUrl },
+                },
+              ],
+            }
+          : meme
+      )
+    );
+  };
   
   const { mutate } = useMutation({
     mutationFn: async (data: { memeId: string; content: string }) => {
-      await createMemeComment(token, data.memeId, data.content);
+      const newComment = await createMemeComment(token, data.memeId, data.content);
+      onCommentAdded(newComment);
     },
   });
 
