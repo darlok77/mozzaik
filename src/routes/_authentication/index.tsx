@@ -74,18 +74,18 @@ export const MemeFeedPage: React.FC = () => {
 
   const onCommentAdded = (newComment: CreateCommentResponse) => {
     if (!user) return;
-    const { username, pictureUrl } = user
+    const { username, pictureUrl } = user;
     setMemes((prevMemes) =>
       prevMemes.map((meme) =>
         meme.id === newComment.memeId
           ? {
               ...meme,
               comments: [
-                ...meme.comments,
                 {
                   ...newComment,
                   author: { username, pictureUrl },
                 },
+                ...meme.comments,
               ],
             }
           : meme
@@ -342,7 +342,8 @@ export const MemeFeedPage: React.FC = () => {
             </Collapse>
           </VStack>
         ))}
-        <div ref={loaderRef} />
+        <div ref={loaderRef}>&nbsp;</div>
+        {isLoadingMore && <Loader />}
       </VStack>
     </Flex>
   );
