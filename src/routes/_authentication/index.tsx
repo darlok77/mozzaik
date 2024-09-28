@@ -18,81 +18,125 @@ import { format } from "timeago.js";
 import {
   createMemeComment,
   getMemeComments,
-  GetMemeCommentsResponse,
   getMemes,
   GetMemesResponse,
-  getUserById
+  getUserById,
 } from "../../api";
 import { useAuthToken } from "../../contexts/authentication";
 import { Loader } from "../../components/loader";
 import { MemePicture } from "../../components/meme-picture";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { jwtDecode } from "jwt-decode";
+
+interface Comment {
+  id: string;
+  content: string;
+  authorId: string;
+  createdAt: string;
+  author: {
+    username: string;
+    pictureUrl: string;
+  };
+}
+
+interface Author {
+  id: string;
+  username: string;
+  pictureUrl: string;
+}
+
+type Meme = {
+  author: Author;
+  comments: Comment[];
+} & GetMemesResponse['results'][number];
 
 export const MemeFeedPage: React.FC = () => {
   const token = useAuthToken();
-  const { isLoading, data: memes } = useQuery({
-    queryKey: ["memes"],
-    queryFn: async () => {
-      const memes: GetMemesResponse["results"] = [];
-      const firstPage = await getMemes(token, 1);
-      const remainingPages = Math.round(firstPage.total / firstPage.pageSize);
-      for (let i = 1; i <= remainingPages; i++) {
-        const page = await getMemes(token, i);
-        memes.push(...page.results);
-      }
-      const memesWithAuthorAndComments = [];
-      const memeAuthorsPromises = memes.map(meme => getUserById(token, meme.authorId));
-      const memeAuthors = await Promise.all(memeAuthorsPromises);
+  const [memes, setMemes] = useState<Meme[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isLoadingInitial, setIsLoadingInitial] = useState(true);
+  const loaderRef = useRef<HTMLDivElement | null>(null);
+  const [openedCommentSection, setOpenedCommentSection] = useState<string | null>(null);
+  const [commentContent, setCommentContent] = useState<{[key: string]: string;}>({});
 
-      for (let i = 0; i < memes.length; i++) {
-        const meme = memes[i];
-        const author = memeAuthors[i];
-
-        const comments: GetMemeCommentsResponse["results"] = [];
-        const firstPage = await getMemeComments(token, meme.id, 1);
-        comments.push(...firstPage.results);
-        const remainingCommentPages = Math.round(firstPage.total / firstPage.pageSize);
-        for (let i = 1; i <= remainingCommentPages; i++) {
-          const page = await getMemeComments(token, meme.id, i);
-          comments.push(...page.results);
-        }
-
-        const commentAuthorsPromises = comments.map(comment => getUserById(token, comment.authorId));
-        const commentAuthors = await Promise.all(commentAuthorsPromises);
-
-        const commentsWithAuthor = comments.map((comment, index) => ({
-          ...comment,
-          author: commentAuthors[index],
-        }));
-
-        memesWithAuthorAndComments.push({
-          ...meme,
-          author,
-          comments: commentsWithAuthor,
-        });
-      }
-      return memesWithAuthorAndComments;
-    },
-  });
   const { data: user } = useQuery({
     queryKey: ["user"],
     queryFn: async () => {
       return await getUserById(token, jwtDecode<{ id: string }>(token).id);
     },
+    enabled: !!token
   });
-  const [openedCommentSection, setOpenedCommentSection] = useState<
-    string | null
-  >(null);
-  const [commentContent, setCommentContent] = useState<{
-    [key: string]: string;
-  }>({});
   const { mutate } = useMutation({
     mutationFn: async (data: { memeId: string; content: string }) => {
       await createMemeComment(token, data.memeId, data.content);
     },
   });
-  if (isLoading) {
+
+  const loadMemes = async (page: number) => {
+    const data = await getMemes(token, page);
+    const authorsPromises = data.results.map(meme => getUserById(token, meme.authorId));
+    const authors = await Promise.all(authorsPromises);
+
+    const memesWithCommentsAndAuthors = await Promise.all(data.results.map(async (meme, index) => {
+      const firstPageComments = await getMemeComments(token, meme.id, 1);
+      const comments = firstPageComments.results || [];
+      const commentAuthorsPromises = comments.map(comment => getUserById(token, comment.authorId));
+      const commentAuthors = await Promise.all(commentAuthorsPromises);
+      const commentsWithAuthors: Comment[] = comments.map((comment, idx) => ({
+        ...comment,
+        author: commentAuthors[idx],
+      }));
+      return {
+        ...meme,
+        author: authors[index],
+        comments: commentsWithAuthors,
+      } as Meme;
+    }));
+    return memesWithCommentsAndAuthors;
+  };
+
+  useEffect(() => {
+    const fetchMemes = async () => {
+      const initialMemes = await loadMemes(1);
+      setMemes(initialMemes);
+      setIsLoadingInitial(false);
+    };
+    fetchMemes();
+  }, [token]);
+
+  const loadMoreMemes = async () => {
+    if (isLoadingMore || isLoadingInitial) return;
+    setIsLoadingMore(true);
+    const nextPage = currentPage + 1;
+    const nextMemes = await loadMemes(nextPage);
+    setMemes((prevMemes) => [
+      ...prevMemes, 
+      ...nextMemes.filter(meme => !prevMemes.some(prevMeme => prevMeme.id === meme.id))
+    ]);
+    setCurrentPage(nextPage);
+    setIsLoadingMore(false);
+  };
+
+  useEffect(() => {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting && !isLoadingMore && !isLoadingInitial) {
+          loadMoreMemes();
+        }
+      });
+    }, { threshold: 1.0 });
+    if (loaderRef.current) {
+      observer.observe(loaderRef.current);
+    }
+    return () => {
+      if (loaderRef.current) {
+        observer.unobserve(loaderRef.current);
+      }
+    };
+  }, [loaderRef, isLoadingMore, isLoadingInitial]);
+
+  if (isLoadingInitial) {
     return <Loader data-testid="meme-feed-loader" />;
   }
   return (
@@ -103,138 +147,117 @@ export const MemeFeedPage: React.FC = () => {
         maxWidth={800}
         divider={<StackDivider border="gray.200" />}
       >
-        {memes?.map((meme) => {
-          return (
-            <VStack key={meme.id} p={4} width="full" align="stretch">
-              <Flex justifyContent="space-between" alignItems="center">
-                <Flex>
-                  <Avatar
-                    borderWidth="1px"
-                    borderColor="gray.300"
-                    size="xs"
-                    name={meme.author.username}
-                    src={meme.author.pictureUrl}
-                  />
-                  <Text ml={2} data-testid={`meme-author-${meme.id}`}>{meme.author.username}</Text>
-                </Flex>
-                <Text fontStyle="italic" color="gray.500" fontSize="small">
-                  {format(meme.createdAt)}
+        {memes.map((meme) => (
+          <VStack key={meme.id} p={4} width="full" align="stretch">
+            <Flex justifyContent="space-between" alignItems="center">
+              <Flex>
+                <Avatar
+                  borderWidth="1px"
+                  borderColor="gray.300"
+                  size="xs"
+                  name={meme.author.username}
+                  src={meme.author.pictureUrl}
+                />
+                <Text ml={2} data-testid={`meme-author-${meme.id}`}>
+                  {meme.author.username}
                 </Text>
               </Flex>
-              <MemePicture pictureUrl={meme.pictureUrl} texts={meme.texts} dataTestId={`meme-picture-${meme.id}`} />
-              <Box>
-                <Text fontWeight="bold" fontSize="medium" mb={2}>
-                  Description:{" "}
+              <Text fontStyle="italic" color="gray.500" fontSize="small">
+                {format(meme.createdAt)}
+              </Text>
+            </Flex>
+            <MemePicture
+              pictureUrl={meme.pictureUrl}
+              texts={meme.texts}
+              dataTestId={`meme-picture-${meme.id}`}
+            />
+            <Box>
+              <Text fontWeight="bold" fontSize="medium" mb={2}>
+                Description:{" "}
+              </Text>
+              <Box p={2} borderRadius={8} border="1px solid" borderColor="gray.100">
+                <Text color="gray.500" whiteSpace="pre-line" data-testid={`meme-description-${meme.id}`}>
+                  {meme.description}
                 </Text>
-                <Box
-                  p={2}
-                  borderRadius={8}
-                  border="1px solid"
-                  borderColor="gray.100"
-                >
-                  <Text color="gray.500" whiteSpace="pre-line" data-testid={`meme-description-${meme.id}`}>
-                    {meme.description}
-                  </Text>
-                </Box>
               </Box>
-              <LinkBox as={Box} py={2} borderBottom="1px solid black">
-                <Flex justifyContent="space-between" alignItems="center">
+            </Box>
+            <LinkBox as={Box} py={2} borderBottom="1px solid black">
+              <Flex justifyContent="space-between" alignItems="center">
+                <Flex alignItems="center">
+                  <LinkOverlay
+                    data-testid={`meme-comments-section-${meme.id}`}
+                    cursor="pointer"
+                    onClick={() => setOpenedCommentSection(openedCommentSection === meme.id ? null : meme.id)}
+                  >
+                    <Text data-testid={`meme-comments-count-${meme.id}`}>
+                      {meme.comments.length} comments
+                    </Text>
+                  </LinkOverlay>
+                  <Icon
+                    as={openedCommentSection !== meme.id ? CaretDown : CaretUp}
+                    ml={2}
+                    mt={1}
+                  />
+                </Flex>
+                <Icon as={Chat} />
+              </Flex>
+            </LinkBox>
+            <Collapse in={openedCommentSection === meme.id} animateOpacity>
+              <Box mb={6}>
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (commentContent[meme.id]) {
+                      mutate({
+                        memeId: meme.id,
+                        content: commentContent[meme.id],
+                      });
+                    }
+                  }}
+                >
                   <Flex alignItems="center">
-                    <LinkOverlay
-                      data-testid={`meme-comments-section-${meme.id}`}
-                      cursor="pointer"
-                      onClick={() =>
-                        setOpenedCommentSection(
-                          openedCommentSection === meme.id ? null : meme.id,
-                        )
-                      }
-                    >
-                      <Text data-testid={`meme-comments-count-${meme.id}`}>{meme.commentsCount} comments</Text>
-                    </LinkOverlay>
-                    <Icon
-                      as={
-                        openedCommentSection !== meme.id ? CaretDown : CaretUp
-                      }
-                      ml={2}
-                      mt={1}
+                    <Avatar
+                      borderWidth="1px"
+                      borderColor="gray.300"
+                      name={user?.username}
+                      src={user?.pictureUrl}
+                      size="sm"
+                      mr={2}
+                    />
+                    <Input
+                      placeholder="Type your comment here..."
+                      onChange={(event) => {
+                        setCommentContent({
+                          ...commentContent,
+                          [meme.id]: event.target.value,
+                        });
+                      }}
+                      value={commentContent[meme.id] || ""}
                     />
                   </Flex>
-                  <Icon as={Chat} />
-                </Flex>
-              </LinkBox>
-              <Collapse in={openedCommentSection === meme.id} animateOpacity>
-                <Box mb={6}>
-                  <form
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      if (commentContent[meme.id]) {
-                        mutate({
-                          memeId: meme.id,
-                          content: commentContent[meme.id],
-                        });
-                      }
-                    }}
-                  >
-                    <Flex alignItems="center">
-                      <Avatar
-                        borderWidth="1px"
-                        borderColor="gray.300"
-                        name={user?.username}
-                        src={user?.pictureUrl}
-                        size="sm"
-                        mr={2}
-                      />
-                      <Input
-                        placeholder="Type your comment here..."
-                        onChange={(event) => {
-                          setCommentContent({
-                            ...commentContent,
-                            [meme.id]: event.target.value,
-                          });
-                        }}
-                        value={commentContent[meme.id]}
-                      />
-                    </Flex>
-                  </form>
-                </Box>
-                <VStack align="stretch" spacing={4}>
-                  {meme.comments.map((comment) => (
-                    <Flex key={comment.id}>
-                      <Avatar
-                        borderWidth="1px"
-                        borderColor="gray.300"
-                        size="sm"
-                        name={comment.author.username}
-                        src={comment.author.pictureUrl}
-                        mr={2}
-                      />
-                      <Box p={2} borderRadius={8} bg="gray.50" flexGrow={1}>
-                        <Flex
-                          justifyContent="space-between"
-                          alignItems="center"
-                        >
-                          <Flex>
-                            <Text data-testid={`meme-comment-author-${meme.id}-${comment.id}`}>{comment.author.username}</Text>
-                          </Flex>
-                          <Text
-                            fontStyle="italic"
-                            color="gray.500"
-                            fontSize="small"
-                          >
-                            {format(comment.createdAt)}
-                          </Text>
-                        </Flex>
-                        <Text color="gray.500" whiteSpace="pre-line" data-testid={`meme-comment-content-${meme.id}-${comment.id}`}>
-                          {comment.content}
-                        </Text>
-                      </Box>
-                    </Flex>
-                  ))}
-                </VStack>
-              </Collapse>
-            </VStack>
-          );
-        })}
+                </form>
+              </Box>
+              <VStack align="stretch" spacing={4}>
+                {meme.comments.map((comment) => (
+                  <Flex key={comment.id} alignItems="center">
+                    <Avatar
+                      borderWidth="1px"
+                      borderColor="gray.300"
+                      size="xs"
+                      name={comment.author.username}
+                      src={comment.author.pictureUrl}
+                    />
+                    <Text ml={2}>
+                      <strong>{comment.author.username}</strong>: {comment.content}
+                    </Text>
+                  </Flex>
+                ))}
+              </VStack>
+            </Collapse>
+          </VStack>
+        ))}
+        <div ref={loaderRef} style={{ height: "20px" }}>&nbsp;</div>
+        {isLoadingMore && <Loader />}
       </VStack>
     </Flex>
   );
