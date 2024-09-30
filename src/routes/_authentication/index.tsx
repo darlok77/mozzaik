@@ -90,10 +90,15 @@ export const MemeFeedPage: React.FC = () => {
                 },
                 ...meme.comments,
               ],
+              totalComments: meme.totalComments + 1
             }
           : meme
       )
     );
+    setCommentContent((prev) => ({
+      ...prev,
+      [newComment.memeId]: "",
+    }));
   };
   
   const { mutate } = useMutation({
