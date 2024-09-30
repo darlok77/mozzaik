@@ -31,8 +31,12 @@ export const AuthenticationContext = createContext<Authentication | undefined>(
 export const AuthenticationProvider: React.FC<PropsWithChildren> = ({
   children,
 }) => {
+  const authToken = localStorage.getItem('token');
+
   const [state, setState] = useState<AuthenticationState>({
-    isAuthenticated: false,
+    isAuthenticated: !!authToken,
+    token: authToken ?? '',
+    userId: authToken ? jwtDecode<{ id: string }>(authToken).id : '',
   });
 
   const authenticate = useCallback(
@@ -42,6 +46,7 @@ export const AuthenticationProvider: React.FC<PropsWithChildren> = ({
         token,
         userId: jwtDecode<{ id: string }>(token).id,
       });
+      localStorage.setItem('token', token);
     },
     [setState],
   );
