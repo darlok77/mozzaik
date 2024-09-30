@@ -12,7 +12,7 @@ export class NotFoundError extends Error {
   }
 }
 
-function checkStatus(response: Response) {
+const checkStatus = (response: Response) => {
   if (response.status === 401) {
     localStorage.removeItem('token');
     throw new UnauthorizedError();
@@ -33,7 +33,7 @@ export type LoginResponse = {
  * @param password 
  * @returns 
  */
-export async function login(username: string, password: string): Promise<LoginResponse> {
+export const login = async (username: string, password: string): Promise<LoginResponse> => {
   return await fetch(`${BASE_URL}/authentication/login`, {
     method: 'POST',
     headers: {
@@ -55,7 +55,7 @@ export type GetUserByIdResponse = {
  * @param id 
  * @returns 
  */
-export async function getUserById(token: string, id: string): Promise<GetUserByIdResponse> {
+export const getUserById = async (token: string, id: string): Promise<GetUserByIdResponse> => {
   return await fetch(`${BASE_URL}/users/${id}`, {
     headers: {
       'Content-Type': 'application/json',
@@ -88,7 +88,7 @@ export type GetMemesResponse = {
  * @param page 
  * @returns 
  */
-export async function getMemes(token: string, page: number): Promise<GetMemesResponse> {
+export const getMemes = async (token: string, page: number): Promise<GetMemesResponse> => {
   return await fetch(`${BASE_URL}/memes?page=${page}`, {
     headers: {
       'Content-Type': 'application/json',
@@ -115,7 +115,7 @@ export type GetMemeCommentsResponse = {
  * @param memeId
  * @returns
  */
-export async function getMemeComments(token: string, memeId: string, page: number): Promise<GetMemeCommentsResponse> {
+export const getMemeComments = async(token: string, memeId: string, page: number): Promise<GetMemeCommentsResponse> => {
   return await fetch(`${BASE_URL}/memes/${memeId}/comments?page=${page}`, {
     headers: {
       'Content-Type': 'application/json',
@@ -138,7 +138,7 @@ export type CreateCommentResponse = {
  * @param memeId
  * @param content
  */
-export async function createMemeComment(token: string, memeId: string, content: string): Promise<CreateCommentResponse> {
+export const createMemeComment = async (token: string, memeId: string, content: string): Promise<CreateCommentResponse> => {
   return await fetch(`${BASE_URL}/memes/${memeId}/comments`, {
     method: 'POST',
     headers: {
@@ -147,4 +147,29 @@ export async function createMemeComment(token: string, memeId: string, content: 
     },
     body: JSON.stringify({ content }),
   }).then(res => checkStatus(res).json());
+}
+
+export const createMeme = async (
+  token: string,
+  picture: File,
+  description: string,
+  texts: { content: string; x: number; y: number }[]
+) => {
+  const formData = new FormData();
+  formData.append("description", description);
+  formData.append("picture", picture);
+
+  texts.forEach((text, index) => {
+    formData.append(`Texts[${index}][Content]`, text.content);
+    formData.append(`Texts[${index}][X]`, Math.floor(text.x).toString());
+    formData.append(`Texts[${index}][Y]`, Math.floor(text.y).toString());
+  });
+
+  return await fetch(`${BASE_URL}/memes`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  }).then((res) => checkStatus(res).json());
 }

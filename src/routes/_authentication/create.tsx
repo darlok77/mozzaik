@@ -8,13 +8,17 @@ import {
   IconButton,
   Input,
   Textarea,
-  VStack,
+  VStack
 } from "@chakra-ui/react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { MemeEditor } from "../../components/meme-editor";
 import { useMemo, useState } from "react";
+import keyGen from "react-id-generator"
 import { MemePictureProps } from "../../components/meme-picture";
 import { Plus, Trash } from "@phosphor-icons/react";
+import { useAuthToken } from "../../contexts/authentication";
+import { createMeme } from "../../api";
+import { useMutation } from "@tanstack/react-query";
 
 export const Route = createFileRoute("/_authentication/create")({
   component: CreateMemePage,
@@ -25,10 +29,25 @@ type Picture = {
   file: File;
 };
 
-function CreateMemePage() {
+const CreateMemePage = () => {
   const [picture, setPicture] = useState<Picture | null>(null);
   const [texts, setTexts] = useState<MemePictureProps["texts"]>([]);
+  const [description, setDescription] = useState("");
+  const token = useAuthToken();
+  const navigate = useNavigate();
 
+  const { mutate: handleSubmitMeme, isPending: isSubmiting } = useMutation({
+    mutationFn: async () => {
+      if (picture && description) {
+        return await createMeme(token, picture.file, description, texts);
+      }
+    },
+    onSuccess: () => {
+      navigate({
+        to: "/",
+      });
+    },
+  });
   const handleDrop = (file: File) => {
     setPicture({
       url: URL.createObjectURL(file),
@@ -76,7 +95,11 @@ function CreateMemePage() {
             <Heading as="h2" size="md" mb={2}>
               Describe your meme
             </Heading>
-            <Textarea placeholder="Type your description here..." />
+            <Textarea
+              placeholder="Type your description here..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
           </Box>
         </VStack>
       </Box>
@@ -93,8 +116,16 @@ function CreateMemePage() {
         <Box p={4} flexGrow={1} height={0} overflowY="auto">
           <VStack>
             {texts.map((text, index) => (
-              <Flex width="full">
-                <Input key={index} value={text.content} mr={1} />
+              <Flex key={keyGen()} width="full">
+                <Input
+                  value={text.content}
+                  mr={1}
+                  onChange={(e) => {
+                    const newTexts = [...texts];
+                    newTexts[index].content = e.target.value;
+                    setTexts(newTexts);
+                  }}
+                />
                 <IconButton
                   onClick={() => handleDeleteCaptionButtonClick(index)}
                   aria-label="Delete caption"
@@ -131,7 +162,9 @@ function CreateMemePage() {
             size="sm"
             width="full"
             color="white"
-            isDisabled={memePicture === undefined}
+            isDisabled={memePicture === undefined || !description}
+            onClick={() => handleSubmitMeme()}
+            isLoading={isSubmiting}
           >
             Submit
           </Button>
