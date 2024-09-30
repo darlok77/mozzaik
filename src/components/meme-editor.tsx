@@ -2,57 +2,57 @@ import { useDropzone } from "react-dropzone";
 import { MemePicture, MemePictureProps } from "./meme-picture";
 import { AspectRatio, Box, Button, Flex, Icon, Text } from "@chakra-ui/react";
 import { Image, Pencil } from "@phosphor-icons/react";
+import { DndProvider } from "react-dnd"
+import { HTML5Backend } from "react-dnd-html5-backend"
 
 export type MemeEditorProps = {
   onDrop: (file: File) => void;
   memePicture?: MemePictureProps;
 };
 
-function renderNoPicture() {
-  return (
-    <Flex
-      flexDir="column"
-      width="full"
-      height="full"
-      alignItems="center"
-      justifyContent="center"
-    >
-      <Icon as={Image} color="black" boxSize={16} />
-      <Text>Select a picture</Text>
-      <Text color="gray.400" fontSize="sm">
-        or drop it in this area
-      </Text>
-    </Flex>
-  );
-}
+const renderNoPicture = () => (
+  <Flex
+    flexDir="column"
+    width="full"
+    height="full"
+    alignItems="center"
+    justifyContent="center"
+  >
+    <Icon as={Image} color="black" boxSize={16} />
+    <Text>Select a picture</Text>
+    <Text color="gray.400" fontSize="sm">
+      or drop it in this area
+    </Text>
+  </Flex>
+);
 
-function renderMemePicture(memePicture: MemePictureProps, open: () => void) {
-  return (
-    <Box width="full" height="full" position="relative" __css={{
-      "&:hover .change-picture-button": {
-        display: "inline-block",
-      },
-      "& .change-picture-button": {
-        display: "none",
-      },
-    }}>
-      <MemePicture {...memePicture} />
-      <Button
-        className="change-picture-button"
-        leftIcon={<Icon as={Pencil} boxSize={4} />}
-        colorScheme="cyan"
-        color="white"
-        top="50%"
-        left="50%"
-        transform="translate(-50%, -50%)"
-        position="absolute"
-        onClick={open}
-      >
-        Change picture
-      </Button>
-    </Box>
-  );
-}
+const renderMemePicture = (memePicture: MemePictureProps, open: () => void) => (
+  <Box width="full" height="full" position="relative" __css={{
+    "&:hover .change-picture-button": {
+      display: "inline-block",
+    },
+    "& .change-picture-button": {
+      display: "none",
+    },
+  }}>
+    <DndProvider backend={HTML5Backend}>
+      <MemePicture {...memePicture} dragableTexts={true}/>
+    </DndProvider>
+    <Button
+      className="change-picture-button"
+      leftIcon={<Icon as={Pencil} boxSize={4} />}
+      colorScheme="cyan"
+      color="white"
+      top="50%"
+      left="50%"
+      transform="translate(-50%, -50%)"
+      position="absolute"
+      onClick={open}
+    >
+      Change picture
+    </Button>
+  </Box>
+);
 
 export const MemeEditor: React.FC<MemeEditorProps> = ({
   onDrop,

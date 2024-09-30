@@ -16,6 +16,11 @@ import {
 } from "@chakra-ui/react";
 import { CaretDown, CaretUp, Chat } from "@phosphor-icons/react";
 import { format } from "timeago.js";
+import { DndProvider } from "react-dnd"
+import { HTML5Backend } from "react-dnd-html5-backend"
+import { useState, useEffect, useRef } from "react";
+import { jwtDecode } from "jwt-decode";
+
 import {
   createMemeComment,
   CreateCommentResponse,
@@ -27,8 +32,7 @@ import {
 import { useAuthToken } from "../../contexts/authentication";
 import { Loader } from "../../components/loader";
 import { MemePicture } from "../../components/meme-picture";
-import { useState, useEffect, useRef } from "react";
-import { jwtDecode } from "jwt-decode";
+
 
 interface Comment {
   id: string;
@@ -51,7 +55,7 @@ type Meme = {
   author: Author;
   comments: Comment[];
   totalComments: number;
-} & GetMemesResponse['results'][number];
+} & GetMemesResponse["results"][number];
 
 export const MemeFeedPage: React.FC = () => {
   const token = useAuthToken();
@@ -63,7 +67,6 @@ export const MemeFeedPage: React.FC = () => {
   const [openedCommentSection, setOpenedCommentSection] = useState<string | null>(null);
   const [commentContent, setCommentContent] = useState<{[key: string]: string;}>({});
   const [commentPages, setCommentPages] = useState<{ [memeId: string]: number }>({});
-
   const { data: user } = useQuery({
     queryKey: ["user"],
     queryFn: async () => {
@@ -243,11 +246,14 @@ export const MemeFeedPage: React.FC = () => {
                 {format(meme.createdAt)}
               </Text>
             </Flex>
-            <MemePicture
-              pictureUrl={meme.pictureUrl}
-              texts={meme.texts}
-              dataTestId={`meme-picture-${meme.id}`}
-            />
+            <DndProvider backend={HTML5Backend}>
+              <MemePicture
+                pictureUrl={meme.pictureUrl}
+                texts={meme.texts}
+                dataTestId={`meme-picture-${meme.id}`}
+              />
+            </DndProvider>
+
             <Box>
               <Text fontWeight="bold" fontSize="medium" mb={2}>
                 Description:{" "}
@@ -266,6 +272,7 @@ export const MemeFeedPage: React.FC = () => {
                     cursor="pointer"
                     onClick={() => toggleCommentSection(meme.id)}
                   >
+                    {/* <Text data-testid={`meme-comments-count-${meme.id}`}> */}
                     <Text data-testid={`meme-comments-count-${meme.id}`}>
                       {meme.totalComments} comments
                     </Text>

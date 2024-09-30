@@ -29,12 +29,13 @@ type Picture = {
   file: File;
 };
 
-const CreateMemePage = () => {
+function CreateMemePage() {
+  const token = useAuthToken();
+  const navigate = useNavigate();
+  
   const [picture, setPicture] = useState<Picture | null>(null);
   const [texts, setTexts] = useState<MemePictureProps["texts"]>([]);
   const [description, setDescription] = useState("");
-  const token = useAuthToken();
-  const navigate = useNavigate();
 
   const { mutate: handleSubmitMeme, isPending: isSubmiting } = useMutation({
     mutationFn: async () => {
@@ -78,6 +79,7 @@ const CreateMemePage = () => {
     return {
       pictureUrl: picture.url,
       texts,
+      onChangeTexts: setTexts
     };
   }, [picture, texts]);
 

@@ -22,9 +22,12 @@
     "framer-motion": "^11.3.19",
     "jwt-decode": "^4.0.0",
     "react": "^18.3.1",
+    "react-dnd": "^16.0.1",
+    "react-dnd-html5-backend": "^16.0.1",
     "react-dom": "^18.3.1",
     "react-dropzone": "^14.2.3",
     "react-hook-form": "^7.52.1",
+    "react-id-generator": "^3.0.2",
     "timeago.js": "^4.0.2"
   },
   "devDependencies": {
