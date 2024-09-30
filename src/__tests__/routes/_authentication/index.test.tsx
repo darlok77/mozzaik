@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, fireEvent,  waitFor } from '@testing-library/react';
 import { ChakraProvider } from "@chakra-ui/react";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import { AuthenticationContext } from "../../../contexts/authentication";
@@ -73,6 +73,27 @@ describe("routes/_authentication/index", () => {
         
         expect(screen.getByTestId("meme-comment-content-dummy_meme_id_1-dummy_comment_id_3")).toHaveTextContent('dummy comment 3');
         expect(screen.getByTestId("meme-comment-author-dummy_meme_id_1-dummy_comment_id_3")).toHaveTextContent('dummy_user_3');
+      });
+    });
+
+    
+    it('should add a new comment', async () => {
+      renderMemeFeedPage();
+      const commentContent = 'This is a new comment';
+
+      await waitFor(() => {
+        screen.getByTestId('meme-comments-section-dummy_meme_id_1').click();
+      });
+
+      act(() => {
+        const input = screen.getByTestId('meme-comment-input-dummy_meme_id_1');
+        fireEvent.change(input, { target: { value: commentContent } });
+        fireEvent.submit(input);
+      });
+
+      await waitFor(() => {
+        const input = screen.getByTestId('meme-comment-input-dummy_meme_id_1');
+        expect(input).toHaveValue(commentContent);
       });
     });
   });

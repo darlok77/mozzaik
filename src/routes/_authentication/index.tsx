@@ -193,6 +193,7 @@ export const MemeFeedPage: React.FC = () => {
     }
   };
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting && !isLoadingMore && !isLoadingInitial) {
@@ -272,7 +273,6 @@ export const MemeFeedPage: React.FC = () => {
                     cursor="pointer"
                     onClick={() => toggleCommentSection(meme.id)}
                   >
-                    {/* <Text data-testid={`meme-comments-count-${meme.id}`}> */}
                     <Text data-testid={`meme-comments-count-${meme.id}`}>
                       {meme.totalComments} comments
                     </Text>
@@ -309,6 +309,7 @@ export const MemeFeedPage: React.FC = () => {
                         mr={2}
                       />
                       <Input
+                        data-testid={`meme-comment-input-${meme.id}`}
                         placeholder="Type your comment here..."
                         onChange={(event) => {
                           setCommentContent({
@@ -322,24 +323,36 @@ export const MemeFeedPage: React.FC = () => {
                   </form>
                 <VStack align="stretch" spacing={4}>
                 {meme.comments.map((comment) => (
-                  <Box
-                    key={comment.id}
-                    mt={4}
-                    data-testid={`meme-comment-${comment.id}`}
-                  >
-                    <Flex alignItems="center">
-                      <Avatar
-                        size="xs"
-                        name={comment.author.username}
-                        src={comment.author.pictureUrl}
-                      />
-                      <Text ml={2}>{comment.author.username}</Text>
-                      <Text ml="auto" fontStyle="italic" color="gray.500" fontSize="small">
-                        {format(comment.createdAt)}
-                      </Text>
-                    </Flex>
-                    <Text>{comment.content}</Text>
-                  </Box>
+                  <Flex key={comment.id}>
+                   <Avatar
+                     borderWidth="1px"
+                     borderColor="gray.300"
+                     size="sm"
+                     name={comment.author.username}
+                     src={comment.author.pictureUrl}
+                     mr={2}
+                   />
+                   <Box p={2} borderRadius={8} bg="gray.50" flexGrow={1}>
+                     <Flex
+                       justifyContent="space-between"
+                       alignItems="center"
+                     >
+                       <Flex>
+                         <Text data-testid={`meme-comment-author-${meme.id}-${comment.id}`}>{comment.author.username}</Text>
+                       </Flex>
+                       <Text
+                         fontStyle="italic"
+                         color="gray.500"
+                         fontSize="small"
+                       >
+                         {format(comment.createdAt)}
+                       </Text>
+                     </Flex>
+                     <Text color="gray.500" whiteSpace="pre-line" data-testid={`meme-comment-content-${meme.id}-${comment.id}`}>
+                       {comment.content}
+                     </Text>
+                   </Box>
+                 </Flex>
                   ))}
                   {meme.comments.length < meme.totalComments && (
                     <Button onClick={() => handleClikMoreComment()}>Show more comments</Button>
